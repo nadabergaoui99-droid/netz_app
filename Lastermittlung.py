@@ -94,112 +94,113 @@ gebäudeclustering_typen = [
     "Ländlicher Bereich",
     "Speckgürtel"]
 
-
+st.subheader("Eigenschaften des Gebietstyps")
 gebietstyp = st.selectbox(
     "Gebietstyp auswählen:",
     list(gebietsdaten.keys())
 )
 
-st.subheader("Eigenschaften des Gebietstyps")
+
 st.write(f"**Beschreibung:** {gebietsdaten[gebietstyp]['Beschreibung']}")
 st.write(f"**Typische Verbraucher:** {gebietsdaten[gebietstyp]['Typische Verbraucher']}")
 st.write(f"**Charakteristik:** {gebietsdaten[gebietstyp]['Charakteristik']}")
 
 st.divider()
+# Init state
+if "step" not in st.session_state:
+    st.session_state.step = 1
+if "selected" not in st.session_state:
+    st.session_state.selected = []
 
-st.subheader("Gleichzeitigkeitsfaktorberechnung für Netzteilnehmer")
 
-gebäudecluster = st.selectbox(
-    "Gebäudeclustering auswählen:",
-    gebäudeclustering_typen
-)
+st.subheader("Lastabschätzung von Neubaugebieten ")
+ 
+def step1():   
+    # The multiselect
+    selected = st.multiselect(
+        label="Wähle oder tippe neue Arten:",
+        options=typen,
+        accept_new_options=True,
+        placeholder="Tippen zum Hinzufügen..."
+    )
+    if st.button("Weiter"):
+        st.session_state.selected = selected
+        st.session_state.step = 2
+        st.rerun()
 
-# Header row
-col1, col2, col3 = st.columns([2, 2, 2], gap="large" )
-with col1:
-    st.markdown("**Netzteilnehmertyp**")
-with col2:
-    st.markdown("**Anzahl n**")
-with col3:
-    st.markdown("**g(n)**")
+def step2():
+    st.text("Eingaben")
 
-n_values = {}
-ergebnisse = []
+    selected = st.session_state.get("selected", [])
 
-for i, typ in enumerate(typen):
-    col1, col2, col3 = st.columns([2, 2, 2], gap="large")
-    
-
-    with col1:
-        st.write(typ)
-
-    with col2:
-        n = st.number_input(
-            f"Anzahl für {typ}",
-            min_value=0,
+    if "Haushalt" in selected:
+        st.markdown(" **Anzahl der Haushalte**")
+        st.number_input(
+            "Wie viele Haushalte sind vorhanden?",
+            min_value=1,
             step=1,
-            key=f"n_{i}",
+            key="n_h",
             label_visibility="collapsed"
         )
-    n_values[typ] = int(n)
+
+    if "Gewerbe" in selected:
+        st.write("")
+        st.markdown(" **Anzahl der Gewerbeeinheiten**")
+        st.number_input(
+            "Wie viele Gewerbeeinheiten sind vorhanden?",
+            min_value=1,
+            step=1,
+            key="n_g",
+            label_visibility="collapsed"
+        )
+
+    if st.button("Zurück"):
+        st.session_state.step = 1
+        st.rerun()
     
-    # Wärmepumpen automatisch setzen
+       # 👉 EVERYTHING inside popover
+    with st.expander("📊 Eingaben anzeigen"):
+    # your full table here
+        
+        # Header row
+        col1, col2, col3 = st.columns([2, 2, 2])
+        with col1:
+            st.markdown("**Netzteilnehmertyp**")
+        with col2:
+            st.markdown("**Anzahl n**")
+        with col3:
+            st.markdown("**g(n)**")
+
+        ergebnisse = []
+
+        for i, typ in enumerate(selected):
+            col1, col2, col3 = st.columns([2, 2, 2])
+
+            with col1:
+                st.write(typ)
+
+            with col2:
+                n = st.number_input(
+                    f"Anzahl für {typ}",
+                    min_value=0,
+                    step=1,
+                    key=f"n_{i}",
+                    label_visibility="collapsed"
+                )
+
+            g = gleichzeitigkeitsfaktor(typ, int(n))
+            ergebnisse.append((typ, int(n), g))
+            with col3:
+                st.write(f"{g:.4f}")
+    st.session_state.ergebnisse = ergebnisse
+
+steps = {
+    1: step1,
+    2: step2,
    
-if gebäudecluster == "Neubau ohne Gas/Wärme":
-    haushalte = n_values.get("Haushalt", 0)
-    n_values["Wärmepumpe"] = int(0.5 * haushalte)
-    st.info("Für 'Neubau ohne Gas/Wärme' wurde die Anzahl der Wärmepumpen automatisch auf 50% der Haushalte gesetzt.")
-    # Tabelle mit Ergebnissen anzeigen
-for typ in typen:
-    g = gleichzeitigkeitsfaktor(typ, n_values.get(typ, 0))
-    ergebnisse.append((typ, n_values.get(typ, 0), g))
+}
 
-    col1, col2, col3 = st.columns([2, 2, 2], gap="large")
-    with col1:
-        st.write(typ)
-    with col2:
-        st.write(n_values.get(typ, 0))
-    with col3:
-        st.write(f"{g:.4f}")
-
- # Add empty editable row
-st.markdown("**Neuen Netzteilnehmer hinzufügen:**")
-
-col1, col2, col3 = st.columns([2, 2, 2], gap="small")
-
-with col1:
-    custom_typ = st.text_input(
-        "Netzteilnehmertyp",
-        key="custom_typ",
-        label_visibility="collapsed",
-        placeholder="Netzteilnehmertyp hinzufügen"
-    )
-
-with col2:
-    custom_n = st.number_input(
-        "Anzahl n",
-        min_value=0,
-        step=1,
-        key="custom_n",
-        label_visibility="collapsed"
-    )
-
-with col3:
-    custom_g = st.number_input(
-        "g(n)",
-        min_value=0.0,
-        max_value=1.0,
-        step=0.0001,
-        key="custom_g",
-        label_visibility="collapsed"
-    )
-if gebäudecluster == "Neubau ohne Gas/Wärme":
-    Haushalte = n_values.get("Haushalt", 0)
-    n_values["Wärmepumpe"] = int(0.5 * Haushalte)
-    st.info("Für 'Neubau ohne Gas/Wärme' wurde die Anzahl der Wärmepumpen automatisch auf 50% der Haushalte gesetzt.")
-
-
-
+steps[st.session_state.step] ()
 st.divider()
 
 

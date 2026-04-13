@@ -114,8 +114,15 @@ if "selected" not in st.session_state:
 
 
 st.subheader("Lastabschätzung von Neubaugebieten ")
+def step1():
+     
+ st.subheader("Eigenschaften des Gebietstyps")
+gebietstyp = st.selectbox(
+    "Gebietstyp auswählen:",
+    list(gebietsdaten.keys())
+    )
  
-def step1():   
+def step2():   
     # The multiselect
     selected = st.multiselect(
         label="Wähle oder tippe neue Arten:",
@@ -128,7 +135,7 @@ def step1():
         st.session_state.step = 2
         st.rerun()
 
-def step2():
+def step3():
     st.text("Eingaben")
 
     selected = st.session_state.get("selected", [])
@@ -197,6 +204,7 @@ def step2():
 steps = {
     1: step1,
     2: step2,
+    3:step3,
    
 }
 

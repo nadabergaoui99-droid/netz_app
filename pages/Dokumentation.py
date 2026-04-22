@@ -25,3 +25,4 @@ st.divider()
 
 st.subheader("Quellen")
 st.markdown("- [Envelio Gruppen-Gleichzeitigkeitsfaktoren](https://bnnetze.envelio.de/docs/de/01-documentation/01-general/01-calculation-principles/01-analysis/04-group-coincidence-factors/)")
+st.markdown("- [Baugesetzbuch](https://www.gesetze-im-internet.de/baunvo/__5a.html)")

@@ -6,7 +6,6 @@ import pandas as pd
 # 1. PAGE CONFIG
 st.set_page_config(page_title="Lastberechnung", page_icon="⚡", layout="wide")
 
-# 2. BRANDING & GLASS-MORPHISM DESIGN (CSS)
 try:
     def get_base64_of_bin_file(bin_file):
         with open(bin_file, 'rb') as f:
@@ -107,7 +106,6 @@ gebietsdaten = {
 }
 
 typen = ["Haushalt", "Wärmepumpe", "E-Mobilität", "Gewerbe"]
-Einspeiser = ["Photovoltaik"]
 gebäudeclustering_typen = [
     "Neubau ohne Gas/Wärme",
     "Neubau mit Gas/Wärme",
@@ -246,25 +244,17 @@ def step1():
 
 def step2():   
     st.subheader("🔌 Infrastruktur")
-    st.write("Wähle aus, welche Einspeisungen und Verbraucher für die Dimensionierung der Trafostation berücksichtigt werden müssen.")
+    st.write("Wähle aus, welche Verbraucher berücksichtigt werden müssen.")
     
-    col1, col2 = st.columns(2, gap="large")
-    with col1:
-        st.markdown("### Bezug")
-        selected_bezug = st.pills(
-            "Verfügbare Bezugsarten:",
-            options=typen,
-            selection_mode="multi",
-            default=st.session_state.selected_bezug,
+   
+    st.markdown("### Bezug")
+    selected_bezug = st.pills(
+    "Verfügbare Bezugsarten:",
+    options=typen,
+    selection_mode="multi",
+    default=st.session_state.selected_bezug,
         )
-    with col2:
-        st.markdown("### Einspeisung")
-        selected_einspeisung = st.pills(
-            "Verfügbare Einspeisearten:",
-            options=Einspeiser,
-            selection_mode="multi",
-            default=st.session_state.selected_einspeisung,
-        )
+    
 
     st.write("")
     col_back, spacer, col_next = st.columns([1, 4, 1])
@@ -274,11 +264,11 @@ def step2():
             st.rerun()
     with col_next:
         if st.button("Weiter →", key="weiter_step2", type="primary", use_container_width=True):
-            if not selected_bezug and not selected_einspeisung:
+            if not selected_bezug and not selected_bezug:
                 st.error("⚠️ Bitte wähle mindestens einen Netzteilnehmer aus.")
             else:
                 st.session_state.selected_bezug = selected_bezug
-                st.session_state.selected_einspeisung = selected_einspeisung
+                st.session_state.selected_bezug = selected_bezug
                 st.session_state.step = 3
                 st.rerun()
 
@@ -319,7 +309,7 @@ def step3():
                 st.session_state.n_gewerbe = n_g
             else:
                 st.warning(
-                    f"⚠️ Gewerbe-Inputs sind laut Ihren Einstellungen nur für 'Mischgebiete' und 'Gewerbegebiet' aktiv. "
+                    f"⚠️ Gewerbe-Inputs sind nur für 'Mischgebiete' und 'Gewerbegebiet' aktiv. "
                     f"Aktueller Typ: **{st.session_state.gebietstyp}**."
                 )
                 st.session_state.n_gewerbe = 0
@@ -341,7 +331,7 @@ def step3():
                 st.session_state.step = 5
             st.rerun()
 def update_ev_value():
-    """Berechnet den Standardwert für Ladepunkte basierend auf Struktur live neu."""
+    
     if "input_siedlungstyp" not in st.session_state or "n_haushalte" not in st.session_state:
         return
         
@@ -383,11 +373,20 @@ def step4():
             min_value=0,
             step=1,
             key="input_n_ev",
-            help="Der Standardwert basiert auf dem gewählten Siedlungstyp, kann aber manuell überschrieben werden."
+            help="Die Anzahl der Fahrzeuge ist editierbar"
         )
    
     st.session_state.n_ev = n_ev
  
+    with st.expander("📘 Berechnungsmethode", expanded=False):
+        st.markdown("""
+       
+        
+        | Siedlungsstruktur (Cluster) | Pkw pro Wohneinheit (WE) | E-Kfz-Anteil  | Mathematische Formel |
+        | :--- | :---: | :---: | :---: |
+        | **Innenstadt** | 0,5 | 40% | WE · 0,4 · 0,4 |
+        | **Randbereich / EFH / Pendler** | 1,4 | 50% | WE · 1,4 · 0,5 |
+        """)
     st.write("")
     col_back, spacer, col_next = st.columns([1, 4, 1])
     with col_back:
@@ -399,83 +398,85 @@ def step4():
             st.session_state.step = 5
             st.rerun()
 
-
 def step5():
     st.subheader("📊 Berechnete Gleichzeitigkeitsfaktoren g(n)")
+    st.write(" die Gleichzeitigkeitsfaktoren kann bei Bedarf direkt in der Tabelle angepasst werden:")
     
-    n_h = st.session_state.n_haushalte if "Haushalt" in st.session_state.selected_bezug else 0
-    n_g = st.session_state.n_gewerbe if "Gewerbe" in st.session_state.selected_bezug else 0
-    n_ev = st.session_state.n_ev if "E-Mobilität" in st.session_state.selected_bezug else 0
-   
     selected_bezug = st.session_state.selected_bezug
-    cluster_percentages = st.session_state.cluster_percentages
+    n_h = st.session_state.n_haushalte if "Haushalt" in selected_bezug else 0
+    n_g = st.session_state.n_gewerbe if "Gewerbe" in selected_bezug else 0
+    n_ev = st.session_state.n_ev if "E-Mobilität" in selected_bezug else 0
     
-    # Wärmepumpen-Clustering auswerten
+    # WP-Anzahl berechnen falls ausgewählt
     n_wp = 0
-    for cluster, percentage in cluster_percentages.items():
-        anteil = percentage / 100
-        if cluster == "Neubau ohne Gas/Wärme":
-            faktor = 1.0
-        elif cluster == "Neubau mit Gas/Wärme":
-            faktor = 0.5
-        elif cluster == "Gebäude älter 10 Jahren":
-            faktor = 0.1
-        else:
-            faktor = 0
-        n_wp += n_h * faktor * anteil
+    if "Wärmepumpe" in selected_bezug and n_h > 0:
+        for cluster, percentage in st.session_state.cluster_percentages.items():
+            anteil = percentage / 100
+            faktor = 1.0 if "ohne Gas" in cluster else (0.5 if "mit Gas" in cluster else 0.1)
+            n_wp += n_h * faktor * anteil
+    st.session_state.n_wp = int(n_wp)
 
-    n_wp = int(n_wp)
-    st.session_state.n_wp = n_wp
-
+    # Basis-Daten generieren
     display_data = []
     if "Haushalt" in selected_bezug and n_h > 0:
-        display_data.append(("Haushalt", n_h, gleichzeitigkeitsfaktor("Haushalt", n_h)))
-    if "Wärmepumpe" in selected_bezug and n_wp > 0:
-        display_data.append(("Wärmepumpe", n_wp, gleichzeitigkeitsfaktor("Wärmepumpe", n_wp)))
+        display_data.append({"Netzteilnehmertyp": "Haushalt", "Anzahl (n)": n_h, "Gleichzeitigkeitsfaktor g(n)": float(f"{gleichzeitigkeitsfaktor('Haushalt', n_h):.4f}")})
+    if "Wärmepumpe" in selected_bezug and st.session_state.n_wp > 0:
+        display_data.append({"Netzteilnehmertyp": "Wärmepumpe", "Anzahl (n)": st.session_state.n_wp, "Gleichzeitigkeitsfaktor g(n)": float(f"{gleichzeitigkeitsfaktor('Wärmepumpe', st.session_state.n_wp):.4f}")})
     if "Gewerbe" in selected_bezug and st.session_state.gebietstyp in ("Mischgebiete", "Gewerbegebiete") and n_g > 0:
-        display_data.append(("Gewerbe", n_g, gleichzeitigkeitsfaktor("Gewerbe", n_g)))
+        display_data.append({"Netzteilnehmertyp": "Gewerbe", "Anzahl (n)": n_g, "Gleichzeitigkeitsfaktor g(n)": float(f"{gleichzeitigkeitsfaktor('Gewerbe', n_g):.4f}")})
     if "E-Mobilität" in selected_bezug and n_ev > 0:
-        display_data.append(("E-Mobilität", n_ev, gleichzeitigkeitsfaktor("E-Mobilität", n_ev)))
+        display_data.append({"Netzteilnehmertyp": "E-Mobilität", "Anzahl (n)": n_ev, "Gleichzeitigkeitsfaktor g(n)": float(f"{gleichzeitigkeitsfaktor('E-Mobilität', n_ev):.4f}")})
 
     if display_data:
-        # Repräsentative Tabelle für Faktoren erstellen
-        df_factors = pd.DataFrame(display_data, columns=["Netzteilnehmertyp", "Anzahl (n)", "Gleichzeitigkeitsfaktor g(n)"])
-        df_factors["Gleichzeitigkeitsfaktor g(n)"] = df_factors["Gleichzeitigkeitsfaktor g(n)"].map(lambda x: f"{x:.4f}")
-        st.dataframe(df_factors, use_container_width=True, hide_index=True)
+        df_base = pd.DataFrame(display_data)
+        
+        # NEU: st.data_editor statt st.dataframe erlaubt direkte Eingabe
+        edited_df = st.data_editor(
+            df_base,
+            use_container_width=True,
+            hide_index=True,
+            disabled=["Netzteilnehmertyp", "Anzahl (n)"], # Nur der Faktor ist editierbar
+            column_config={
+                "Gleichzeitigkeitsfaktor g(n)": st.column_config.NumberColumn(
+                    min_value=0.0,
+                    max_value=1.0,
+                    step=0.0001,
+                    format="%.4f"
+                )
+            }
+        )
+        
+        # Speicher die editierten Faktoren im Session State für Schritt 6 ab
+        factors_dict = dict(zip(edited_df["Netzteilnehmertyp"], edited_df["Gleichzeitigkeitsfaktor g(n)"]))
+        st.session_state.custom_factors = factors_dict
     else:
-        st.warning("⚠️ Keine aktiven Verbraucher mit einer Anzahl größer als 0 für die Faktoren-Berechnung vorhanden.")
+        st.warning("⚠️ Keine aktiven Verbraucher")
+        st.session_state.custom_factors = {}
 
-    st.write("")
     col_back, spacer, col_next = st.columns([1, 4, 1])
     with col_back:
         if st.button("← Zurück", key="zurueck_step5", use_container_width=True):
-            if "E-Mobilität" in selected_bezug:
-                st.session_state.step = 4
-            else:
-                st.session_state.step = 3
+            st.session_state.step = 4 if "E-Mobilität" in selected_bezug else 3
             st.rerun()
     with col_next:
         if st.button("Ergebnis berechnen 🎉", key="weiter_step5", type="primary", use_container_width=True):
             st.session_state.step = 6
             st.rerun()
 
-
 def step6():
-    st.subheader("🏁 Ergebnis der Lastabschätzung")
-    p_ges = 0
+    st.subheader(" Ergebnis der Lastabschätzung")
+    st.write("   **Einzel-Leistung (kW)** kann bei Bedarf nochmals manuell angepasst werden ")
     
-    n_h = st.session_state.n_haushalte
-    n_g = st.session_state.n_gewerbe
-    n_ev = st.session_state.n_ev
-    n_wp = st.session_state.get("n_wp", 0)
     selected_bezug = st.session_state.selected_bezug
-
     werte = {
-        "Haushalt": n_h,
-        "Wärmepumpe": n_wp,
-        "E-Mobilität": n_ev,
-        "Gewerbe": n_g if st.session_state.gebietstyp in ("Mischgebiete", "Gewerbegebiete") else 0,
+        "Haushalt": st.session_state.n_haushalte,
+        "Wärmepumpe": st.session_state.n_wp,
+        "E-Mobilität": st.session_state.n_ev,
+        "Gewerbe": st.session_state.n_gewerbe if st.session_state.gebietstyp in ("Mischgebiete", "Gewerbegebiete") else 0,
     }
+    
+    # Holen der (evtl. editierten) Faktoren aus Schritt 5
+    custom_factors = st.session_state.get("custom_factors", {})
 
     detailed_results = []
     for typ in selected_bezug:
@@ -483,54 +484,70 @@ def step6():
         if n <= 0:
             continue
         p = leistungen.get(typ, 0)
-        g = gleichzeitigkeitsfaktor(typ, n)
-        p_typ = n * p * g
-        p_ges += p_typ
+        g = custom_factors.get(typ, gleichzeitigkeitsfaktor(typ, n))
+        
         detailed_results.append({
             "Typ": typ, 
             "Anzahl (n)": n, 
-            "Einzel-Leistung (kW)": p, 
-            "Gleichzeitigkeit g(n)": round(g, 4), 
-            "Summenleistung (kW)": round(p_typ, 2)
+            "Einzel-Leistung (kW)": float(p), 
+            "Gleichzeitigkeit g(n)": float(g)
         })
     
-    # Ab hier lag der Fehler – diese Zeilen müssen eingerückt bleiben!
+    # Standardwert für p_ges definieren, falls keine Daten vorhanden sind
+    p_ges = 0.0
+    
     if detailed_results:
-        st.dataframe(pd.DataFrame(detailed_results), use_container_width=True, hide_index=True)
-
-    # Option 1: Einzelner Trafo
-    trafo_single = 2500
-    for t in trafo_leistung:
-        if p_ges <= t:
-            trafo_single = t
-            break
-
-    # Option 2: Zwei Trafos (Last geteilt durch 2)
-    p_halbe = p_ges / 2
-    trafo_half_size = 2500
-    for t in trafo_leistung:
-        if p_halbe <= t:
-            trafo_half_size = t
-            break
-
-    st.write("")
-    st.metric(label="Errechnete Gesamtleistung P_ges", value=f"{p_ges:.2f} kW")
-    
-    st.markdown("### 🛠️ Empfehlung zur Trafostation-Auslegung")
-    
-    col_opt1, col_opt2 = st.columns(2, gap="large")
-    
-    with col_opt1:
-        st.markdown("#### Option A")
-        st.info(f"**1x {trafo_single} kVA** Trafostation")
+        df_res_base = pd.DataFrame(detailed_results)
         
+        edited_res_df = st.data_editor(
+            df_res_base,
+            use_container_width=True,
+            hide_index=True,
+            disabled=["Typ", "Anzahl (n)", "Gleichzeitigkeit g(n)"], 
+            column_config={
+                "Einzel-Leistung (kW)": st.column_config.NumberColumn(
+                    min_value=0.0,
+                    step=0.5,
+                    format="%.1f"
+                )
+            },
+            key="res_editor"
+        )
         
-    with col_opt2:
-        st.markdown("#### Option B")
-        st.success(f"**2x {trafo_half_size} kVA** Trafostationen")
+        # Berechne die Summenleistung pro Zeile
+        edited_res_df["Summenleistung (kW)"] = (
+            edited_res_df["Anzahl (n)"] * edited_res_df["Einzel-Leistung (kW)"] * edited_res_df["Gleichzeitigkeit g(n)"]
+        ).round(2)
         
+        # FEHLERBEHEBUNG 1 & 2: Gesamtleistung aus der editierten Tabelle berechnen
+        p_ges = float(edited_res_df["Summenleistung (kW)"].sum())
+        
+    # FEHLERBEHEBUNG 3: Trafoberechnung und Anzeige in die Einrückung mit einbeziehen
+    # bzw. absichern, dass p_ges existiert:
+    if p_ges > 0:
+        trafo_single = next((t for t in trafo_leistung if p_ges <= t), 2500)
+        trafo_half_size = next((t for t in trafo_leistung if (p_ges / 2) <= t), 2500)
+        
+        st.write(f"Für das gewählte Gebiet wird eine  Gesamtlast von **{p_ges:.2f} kW** erwartet.")
+        
+        with st.expander("📊 Dimensionierung & Trafostation-Empfehlung", expanded=True):
+            col_metric, col_text = st.columns([1, 2], gap="large")
+            with col_metric:
+                st.metric(label="Errechnete Gesamtleistung P_ges", value=f"{p_ges:.2f} kW")
+            with col_text:
+                col_opt1, col_opt2 = st.columns(2, gap="large")
+                with col_opt1:
+                    st.markdown("#### Option A ")
+                    st.info(f"**1x {trafo_single} kVA** Trafostation")
+                    st.caption("Wirtschaftlich optimal bei kompakter Bebauung.")
+                with col_opt2:
+                    st.markdown("#### Option B ")
+                    st.success(f"**2x {trafo_half_size} kVA** Trafostationen")
+                    st.caption("Höhere Versorgungssicherheit und bessere Spannungshaltung.")
+    else:
+        st.warning("Keine aktiven Verbraucher oder Leistungen zur Berechnung vorhanden.")
 
-    st.write("")
+    # Navigation Buttons (sauber eingerückt auf Funktionsebene)
     col_back, spacer, col_next = st.columns([1, 4, 1])
     with col_back:
         if st.button("← Zurück", key="zurueck_step6", use_container_width=True):
@@ -542,19 +559,17 @@ def step6():
             st.rerun()
 
 
-
-steps = {
-    1: step1, 
-    2: step2, 
-    3: step3, 
-    4: step4, 
-    5: step5, 
-    6: step6
-}
-
-# Rendert die visuelle Statuszeile oben über der App
 render_progress_bar(st.session_state.step)
 
-# Führt das aktuelle Skript-Segment aus
-steps[st.session_state.step]()
-st.divider()
+if st.session_state.step == 1:
+    step1()
+elif st.session_state.step == 2:
+    step2()
+elif st.session_state.step == 3:
+    step3()
+elif st.session_state.step == 4:
+    step4()
+elif st.session_state.step == 5:
+    step5()
+elif st.session_state.step == 6:
+    step6()
